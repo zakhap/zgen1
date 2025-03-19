@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Geometric Pattern Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 15px;
+        }
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Random Geometric Pattern Generator</h1>
+        <p>Inspired by geometric and aboriginal art patterns</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="bgColor">Background:</label>
+                <select id="bgColor">
+                    <option value="green">Green</option>
+                    <option value="blue">Blue</option>
+                    <option value="brown">Brown</option>
+                    <option value="purple">Purple</option>
+                    <option value="random">Random</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="fgColor">Shape Color:</label>
+                <select id="fgColor">
+                    <option value="red">Red</option>
+                    <option value="orange">Orange</option>
+                    <option value="yellow">Yellow</option>
+                    <option value="white">White</option>
+                    <option value="random">Random</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="dotDensity">Dot Density:</label>
+                <input type="range" id="dotDensity" min="500" max="5000" value="2000">
+            </div>
+            
+            <div class="control-group">
+                <label for="complexity">Shape Complexity:</label>
+                <input type="range" id="complexity" min="3" max="10" value="6">
+            </div>
+        </div>
+        
+        <button id="generateBtn">Generate New Pattern</button>
+        <button id="downloadBtn">Download as Image</button>
+        
+        <canvas id="patternCanvas" width="600" height="600"></canvas>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('patternCanvas');
+            const ctx = canvas.getContext('2d');
+            const generateBtn = document.getElementById('generateBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const bgColorSelect = document.getElementById('bgColor');
+            const fgColorSelect = document.getElementById('fgColor');
+            const dotDensityInput = document.getElementById('dotDensity');
+            const complexityInput = document.getElementById('complexity');
+            
+            // Generate pattern initially
+            generatePattern();
+            
+            // Set up event listeners
+            generateBtn.addEventListener('click', generatePattern);
+            downloadBtn.addEventListener('click', downloadPattern);
+            
+            function generatePattern() {
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Get settings
+                const bgColorChoice = bgColorSelect.value;
+                const fgColorChoice = fgColorSelect.value;
+                const dotDensity = parseInt(dotDensityInput.value);
+                const complexity = parseInt(complexityInput.value);
+                
+                // Set background color
+                let bgColor;
+                if (bgColorChoice === 'random') {
+                    bgColor = getRandomColor(false);
+                } else {
+                    const bgOptions = {
+                        'green': '#1a4d1a',
+                        'blue': '#1a3a4d',
+                        'brown': '#4d2e1a',
+                        'purple': '#3a1a4d'
+                    };
+                    bgColor = bgOptions[bgColorChoice] || '#1a4d1a';
+                }
+                
+                // Set foreground color
+                let fgColor;
+                if (fgColorChoice === 'random') {
+                    fgColor = getRandomColor(true);
+                } else {
+                    const fgOptions = {
+                        'red': '#d63031',
+                        'orange': '#e17055',
+                        'yellow': '#fdcb6e',
+                        'white': '#f5f5f5'
+                    };
+                    fgColor = fgOptions[fgColorChoice] || '#d63031';
+                }
+                
+                // Fill background
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw background dots
+                drawBackgroundDots(dotDensity, bgColor);
+                
+                // Generate and draw shapes
+                generateShapes(complexity, fgColor);
+            }
+            
+            function drawBackgroundDots(density, baseColor) {
+                const dotColor = getLighterColor(baseColor);
+                ctx.fillStyle = dotColor;
+                
+                for (let i = 0; i < density; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const size = Math.random() * 3 + 1;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            function generateShapes(complexity, color) {
+                const gridSize = 4; // 4x4 grid
+                const cellWidth = canvas.width / gridSize;
+                const cellHeight = canvas.height / gridSize;
+                const shapeBorder = 10; // Border within each cell
+                
+                // For each cell in the grid
+                for (let row = 0; row < gridSize; row++) {
+                    for (let col = 0; col < gridSize; col++) {
+                        const x = col * cellWidth + shapeBorder;
+                        const y = row * cellHeight + shapeBorder;
+                        const width = cellWidth - (shapeBorder * 2);
+                        const height = cellHeight - (shapeBorder * 2);
+                        
+                        drawRandomSymbol(x, y, width, height, complexity, color);
+                    }
+                }
+            }
+            
+            function drawRandomSymbol(x, y, width, height, complexity, color) {
+                const symbolType = Math.floor(Math.random() * 6);
+                
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                
+                switch (symbolType) {
+                    case 0: // Maze-like pattern
+                        drawMazeSymbol(x, y, width, height, complexity);
+                        break;
+                    case 1: // Spiral
+                        drawSpiralSymbol(x, y, width, height, complexity);
+                        break;
+                    case 2: // Concentric shapes
+                        drawConcentricSymbol(x, y, width, height, complexity);
+                        break;
+                    case 3: // Angular path
+                        drawAngularPathSymbol(x, y, width, height, complexity);
+                        break;
+                    case 4: // Grid pattern
+                        drawGridSymbol(x, y, width, height, complexity);
+                        break;
+                    case 5: // Branching structure
+                        drawBranchingSymbol(x, y, width, height, complexity);
+                        break;
+                }
+            }
+            
+            function drawMazeSymbol(x, y, width, height, complexity) {
+                const segments = 2 + Math.floor(Math.random() * complexity);
+                const segmentWidth = width / segments;
+                const segmentHeight = height / segments;
+                
+                ctx.beginPath();
+                
+                for (let i = 0; i < segments; i++) {
+                    for (let j = 0; j < segments; j++) {
+                        if ((i + j) % 2 === 0 && Math.random() > 0.3) {
+                            const direction = Math.random() > 0.5;
+                            
+                            if (direction) {
+                                // Horizontal line
+                                ctx.moveTo(x + (i * segmentWidth), y + (j * segmentHeight) + (segmentHeight / 2));
+                                ctx.lineTo(x + ((i+1) * segmentWidth), y + (j * segmentHeight) + (segmentHeight / 2));
+                            } else {
+                                // Vertical line
+                                ctx.moveTo(x + (i * segmentWidth) + (segmentWidth / 2), y + (j * segmentHeight));
+                                ctx.lineTo(x + (i * segmentWidth) + (segmentWidth / 2), y + ((j+1) * segmentHeight));
+                            }
+                        }
+                    }
+                }
+                
+                ctx.stroke();
+            }
+            
+            function drawSpiralSymbol(x, y, width, height, complexity) {
+                const centerX = x + width / 2;
+                const centerY = y + height / 2;
+                const maxRadius = Math.min(width, height) / 2;
+                const turns = Math.random() * (complexity / 3) + 1;
+                const points = 50 * turns;
+                
+                ctx.beginPath();
+                
+                for (let i = 0; i <= points; i++) {
+                    const angle = (i / points) * Math.PI * 2 * turns;
+                    const radius = (i / points) * maxRadius;
+                    
+                    const pointX = centerX + Math.cos(angle) * radius;
+                    const pointY = centerY + Math.sin(angle) * radius;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(pointX, pointY);
+                    } else {
+                        ctx.lineTo(pointX, pointY);
+                    }
+                }
+                
+                ctx.stroke();
+            }
+            
+            function drawConcentricSymbol(x, y, width, height, complexity) {
+                const centerX = x + width / 2;
+                const centerY = y + height / 2;
+                const maxRadius = Math.min(width, height) / 2;
+                const rings = Math.floor(Math.random() * complexity) + 2;
+                const shape = Math.floor(Math.random() * 3); // 0: circle, 1: square, 2: triangle
+                
+                for (let i = rings; i > 0; i--) {
+                    const radius = (i / rings) * maxRadius;
+                    
+                    if (shape === 0) { // Circle
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                    else if (shape === 1) { // Square
+                        ctx.beginPath();
+                        ctx.rect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+                        ctx.stroke();
+                    }
+                    else { // Triangle
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, centerY - radius);
+                        ctx.lineTo(centerX - radius * 0.866, centerY + radius * 0.5);
+                        ctx.lineTo(centerX + radius * 0.866, centerY + radius * 0.5);
+                        ctx.closePath();
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            function drawAngularPathSymbol(x, y, width, height, complexity) {
+                const points = Math.floor(Math.random() * complexity) + 3;
+                const path = [];
+                
+                // Generate path points
+                for (let i = 0; i < points; i++) {
+                    path.push({
+                        x: x + Math.random() * width,
+                        y: y + Math.random() * height
+                    });
+                }
+                
+                // Sort points to create a path that doesn't cross itself too much
+                path.sort((a, b) => a.x - b.x);
+                
+                // Draw path
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                
+                for (let i = 1; i < path.length; i++) {
+                    // Create corner points for angular path
+                    if (i < path.length - 1) {
+                        ctx.lineTo(path[i].x, path[i-1].y);
+                    }
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                
+                // Optionally close the path
+                if (Math.random() > 0.5) {
+                    ctx.closePath();
+                }
+                
+                ctx.stroke();
+            }
+            
+            function drawGridSymbol(x, y, width, height, complexity) {
+                const gridDim = Math.floor(Math.random() * 3) + 2;
+                const cellWidth = width / gridDim;
+                const cellHeight = height / gridDim;
+                
+                // Draw horizontal and vertical lines
+                for (let i = 0; i <= gridDim; i++) {
+                    // Horizontal line
+                    if (Math.random() > 0.2) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + i * cellHeight);
+                        ctx.lineTo(x + width, y + i * cellHeight);
+                        ctx.stroke();
+                    }
+                    
+                    // Vertical line
+                    if (Math.random() > 0.2) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + i * cellWidth, y);
+                        ctx.lineTo(x + i * cellWidth, y + height);
+                        ctx.stroke();
+                    }
+                }
+                
+                // Add some diagonal lines
+                for (let i = 0; i < gridDim; i++) {
+                    for (let j = 0; j < gridDim; j++) {
+                        if (Math.random() > 0.7) {
+                            ctx.beginPath();
+                            ctx.moveTo(x + i * cellWidth, y + j * cellHeight);
+                            ctx.lineTo(x + (i+1) * cellWidth, y + (j+1) * cellHeight);
+                            ctx.stroke();
+                        }
+                        else if (Math.random() > 0.7) {
+                            ctx.beginPath();
+                            ctx.moveTo(x + (i+1) * cellWidth, y + j * cellHeight);
+                            ctx.lineTo(x + i * cellWidth, y + (j+1) * cellHeight);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+            
+            function drawBranchingSymbol(x, y, width, height, complexity) {
+                const centerX = x + width / 2;
+                const centerY = y + height / 2;
+                const branches = Math.floor(Math.random() * complexity) + 2;
+                const branchLength = Math.min(width, height) / 2;
+                
+                for (let i = 0; i < branches; i++) {
+                    const angle = (i / branches) * Math.PI * 2;
+                    
+                    // Draw main branch
+                    ctx.beginPath();
+                    ctx.moveTo(centerX, centerY);
+                    const endX = centerX + Math.cos(angle) * branchLength;
+                    const endY = centerY + Math.sin(angle) * branchLength;
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    
+                    // Add sub-branches
+                    if (Math.random() > 0.3) {
+                        const subBranches = Math.floor(Math.random() * 3) + 1;
+                        
+                        for (let j = 0; j < subBranches; j++) {
+                            const subLength = branchLength * (0.3 + Math.random() * 0.4);
+                            const subAngle = angle + (Math.random() * 0.8 - 0.4);
+                            
+                            const midX = centerX + Math.cos(angle) * (branchLength * 0.6);
+                            const midY = centerY + Math.sin(angle) * (branchLength * 0.6);
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(midX, midY);
+                            ctx.lineTo(
+                                midX + Math.cos(subAngle) * subLength * 0.5,
+                                midY + Math.sin(subAngle) * subLength * 0.5
+                            );
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+            
+            function getRandomColor(bright) {
+                if (bright) {
+                    // Brighter colors for foreground
+                    return `hsl(${Math.floor(Math.random() * 360)}, 70%, 50%)`;
+                } else {
+                    // Darker colors for background
+                    return `hsl(${Math.floor(Math.random() * 360)}, 70%, 20%)`;
+                }
+            }
+            
+            function getLighterColor(hexColor) {
+                // Convert hex to RGB
+                let r = parseInt(hexColor.slice(1, 3), 16);
+                let g = parseInt(hexColor.slice(3, 5), 16);
+                let b = parseInt(hexColor.slice(5, 7), 16);
+                
+                // Make it lighter
+                r = Math.min(255, r + 70);
+                g = Math.min(255, g + 70);
+                b = Math.min(255, b + 70);
+                
+                // Convert back to hex
+                return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+            
+            function downloadPattern() {
+                const link = document.createElement('a');
+                link.download = 'geometric-pattern.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+        });
+    </script>
+</body>
+</html>
