@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Art with Mouse Interaction</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100%;
+        }
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glCanvas"></canvas>
+    
+    <script>
+        // Initialize WebGL
+        const canvas = document.getElementById('glCanvas');
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            alert('WebGL not supported in your browser!');
+        }
+
+        // Mouse position tracking
+        let mouseX = 0.5;
+        let mouseY = 0.5;
+        
+        // Track mouse position as normalized coordinates (0.0 to 1.0)
+        function updateMousePosition(event) {
+            mouseX = event.clientX / window.innerWidth;
+            mouseY = 1.0 - (event.clientY / window.innerHeight); // Invert Y for WebGL coordinates
+        }
+        
+        // Add mouse event listeners
+        window.addEventListener('mousemove', updateMousePosition);
+        
+        // For touch devices
+        window.addEventListener('touchmove', (event) => {
+            if (event.touches && event.touches[0]) {
+                const touch = event.touches[0];
+                const mouseEvent = {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                };
+                updateMousePosition(mouseEvent);
+            }
+            event.preventDefault();
+        }, { passive: false });
+        
+        // Default position when no mouse/touch input
+        window.addEventListener('mouseout', () => {
+            mouseX = 0.5;
+            mouseY = 0.5;
+        });
+
+        // Set canvas size to window size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Shader sources
+        const vertexShaderSource = `
+            attribute vec2 a_position;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        const fragmentShaderSource = `
+            precision mediump float;
+            
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform vec2 u_mouse;
+
+            // Linear interpolation function
+            float lerp(float a, float b, float t) {
+                return a + t * (b - a);
+            }
+            
+            // Vector linear interpolation
+            vec3 vlerp(vec3 a, vec3 b, float t) {
+                return a + t * (b - a);
+            }
+            
+            // Color palette function for pastels
+            vec3 palette(float t) {
+                // Pastel color set 1 - soft pinks and lavenders
+                vec3 a1 = vec3(0.8, 0.7, 0.9);  // Soft lavender base
+                vec3 b1 = vec3(0.2, 0.2, 0.3);  // Small variation
+                vec3 c1 = vec3(0.8, 0.8, 1.0);  // Slow color cycle
+                vec3 d1 = vec3(0.1, 0.4, 0.6);  // Phase shift for pink-purple range
+                
+                // Pastel color set 2 - soft blues and light periwinkles
+                vec3 a2 = vec3(0.7, 0.8, 0.95);  // Soft blue base
+                vec3 b2 = vec3(0.2, 0.3, 0.4);   // Small variation
+                vec3 c2 = vec3(0.8, 0.9, 1.0);   // Slow color cycle
+                vec3 d2 = vec3(0.3, 0.5, 0.7);   // Phase shift for blue range
+                
+                // Mix between the two pastel palettes using time
+                float mixFactor = sin(t * 0.1) * 0.5 + 0.5; // Slowly oscillate between palettes
+                
+                vec3 a = mix(a1, a2, mixFactor);
+                vec3 b = mix(b1, b2, mixFactor);
+                vec3 c = mix(c1, c2, mixFactor);
+                vec3 d = mix(d1, d2, mixFactor);
+                
+                return a + b * cos(6.28318 * (c * t + d));
+            }
+
+            void main() {
+                // Normalized coordinates
+                vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+                uv = uv * 2.0 - 1.0;
+                uv.x *= u_resolution.x / u_resolution.y;
+                
+                // Time variables
+                float time = u_time * 0.2;
+                
+                // Initialize color
+                vec3 finalColor = vec3(0.0);
+                
+                // Loop for layered effect
+                for(float i = 0.0; i < 4.0; i++) {
+                    // Position calculation with mouse interaction and varied phases
+                    vec2 p = uv;
+                    
+                    // Convert mouse from 0-1 to -1 to 1 range, correcting for aspect ratio
+                    vec2 mouse = u_mouse * 2.0 - 1.0;
+                    mouse.x *= u_resolution.x / u_resolution.y;
+                    
+                    // Calculate distance from current point to mouse position
+                    float mouseDistance = length(p - mouse);
+                    
+                    // Mouse influence factor (stronger when closer to mouse)
+                    float mouseInfluence = 0.15 / (0.1 + mouseDistance * 2.5);
+                    
+                    // Time phases with variation
+                    float timePhaseX1 = time * 0.9 + i * 0.6;
+                    float timePhaseX2 = time * 0.5 - i * 0.3;
+                    float timePhaseY1 = time * 0.75 + i * 0.9;
+                    float timePhaseY2 = time * 0.65 - i * 0.5;
+                    
+                    // Mouse affected lerp factors
+                    float lerpFactorX = (sin(time * 0.33 + mouse.x) * 0.5 + 0.5);
+                    float lerpFactorY = (cos(time * 0.27 + mouse.y) * 0.5 + 0.5);
+                    
+                    // Calculate offsets with mouse influence
+                    float xOffset = lerp(sin(timePhaseX1), cos(timePhaseX2), lerpFactorX) * 0.2;
+                    float yOffset = lerp(cos(timePhaseY1), sin(timePhaseY2), lerpFactorY) * 0.3;
+                    
+                    // Apply attraction/repulsion effect from mouse
+                    vec2 mouseVector = normalize(p - mouse) * mouseInfluence;
+                    
+                    // Combine all effects
+                    p.x += xOffset + mouseVector.x;
+                    p.y += yOffset + mouseVector.y;
+                    
+                    // Distance from center
+                    float d = length(p);
+                    
+                    // Use mouse position to influence wave mixing
+                    vec2 fixedMouse = u_mouse * 2.0 - 1.0;
+                    float mouseFactor = length(fixedMouse) * 0.5; // How far from center the mouse is
+                    float mixPhase = lerp(
+                        sin(time * 0.15) * 0.5 + 0.5, 
+                        cos(time * 0.2 + mouseFactor) * 0.5 + 0.5,
+                        mouseFactor
+                    );
+                    
+                    // Wave effect with interpolated parameters, varied phases, and mouse influence
+                    float phase1 = time * 0.7 + i * 1.5;
+                    float phase2 = time * 0.4 - i * 0.8;
+                    
+                    // Mouse wave factor calculation
+                    float mouseWaveFactor = sin(mouseDistance * 15.0) * 0.5 + 0.5;
+                    
+                    float wavePhase = lerp(phase1, phase2, mixPhase);
+                    float waveFreq = lerp(6.0, 10.0, sin(time * 0.2 + i * 0.7 + mouseWaveFactor) * 0.5 + 0.5);
+                    float waveAmp = lerp(0.1, 0.15, cos(time * 0.3 + i * 1.2 + mouseFactor) * 0.5 + 0.5);
+                    
+                    d = sin(d * waveFreq + wavePhase) * waveAmp;
+                    d = abs(d);
+                    
+                    // Ensure the shader handles all possible divisions safely
+                    if (d < 0.001) d = 0.001; // Avoid division by very small numbers
+                    
+                    // Combine with time for animation - medium intensity for balanced line thickness
+                    float intensity = lerp(0.0075, 0.02, sin(time * 0.25 + i) * 0.5 + 0.5);
+                    d = intensity / d;
+                    
+                    // Add to final color using palette with interpolated time factors
+                    float colorTime = lerp(time * 0.3, time * 0.5, sin(time * 0.15) * 0.5 + 0.5);
+                    vec3 color1 = palette(length(uv) + i * 0.4 + colorTime);
+                    vec3 color2 = palette(length(uv) + i * 0.3 + colorTime * 1.5);
+                    vec3 color = vlerp(color1, color2, sin(time * 0.2 + i) * 0.5 + 0.5);
+                    
+                    finalColor += color * d;
+                }
+                
+                // Output color
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // Create shader program
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            
+            return shader;
+        }
+
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            
+            // Check if shaders were created successfully
+            if (!vertexShader || !fragmentShader) {
+                console.error('Cannot create program: invalid shaders');
+                return null;
+            }
+            
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program linking error:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            
+            return program;
+        }
+
+        // Initialize shaders and program
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const program = createProgram(gl, vertexShader, fragmentShader);
+
+        // Exit if program creation failed
+        if (!program) {
+            console.error('Failed to create shader program');
+            // Don't use return in the global scope
+            throw new Error('Failed to create shader program');
+        }
+
+        // Get attribute and uniform locations
+        const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+        const resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
+        const timeUniformLocation = gl.getUniformLocation(program, 'u_time');
+        const mouseUniformLocation = gl.getUniformLocation(program, 'u_mouse');
+
+        // Create position buffer
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+        // Quad covering the entire screen (-1 to 1 in both dimensions)
+        const positions = [
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, 1
+        ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+        // Animation loop
+        let startTime = Date.now();
+        function render() {
+            const currentTime = (Date.now() - startTime) / 1000;
+            
+            // Clear and set viewport
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            // Use our shader program
+            gl.useProgram(program);
+            
+            // Setup position attribute
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Set uniforms
+            gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+            gl.uniform1f(timeUniformLocation, currentTime);
+            gl.uniform2f(mouseUniformLocation, mouseX, mouseY);
+            
+            // Draw the quad
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // Request the next frame
+            requestAnimationFrame(render);
+        }
+        
+        // Start animation
+        render();
+    </script>
+</body>
+</html>
