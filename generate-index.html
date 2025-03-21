@@ -1,3 +1,14 @@
+#!/bin/bash
+
+# generate-index.sh
+# Script to generate a top-level index.html file that lists all subdirectories
+# and links to the index.html file inside each of them
+
+# Define the output file
+OUTPUT_FILE="index.html"
+
+# Generate the HTML header
+cat > "$OUTPUT_FILE" << EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,9 +50,31 @@
 <body>
     <h1>Directory Index</h1>
     <ul>
-        <li><a href="shader1/">shader1</a></li>
-        <li><a href="zgen1/">zgen1</a></li>
+EOF
+
+# Find all directories (excluding hidden ones) in the current directory
+for dir in */; do
+    # Skip hidden directories
+    if [[ "$dir" == .* ]]; then
+        continue
+    fi
+    
+    # Remove trailing slash from directory name
+    dirname=${dir%/}
+    
+    # Check if the directory contains an index.html file
+    if [ -f "$dir/index.html" ]; then
+        # Add directory to the list with a link to its index.html
+        echo "        <li><a href=\"$dir\">$dirname</a></li>" >> "$OUTPUT_FILE"
+    fi
+done
+
+# Generate the HTML footer
+cat >> "$OUTPUT_FILE" << EOF
     </ul>
-    <p><small>Last updated: Thu Mar 20 20:56:14 EDT 2025</small></p>
+    <p><small>Last updated: $(date)</small></p>
 </body>
 </html>
+EOF
+
+echo "Generated $OUTPUT_FILE successfully!"
