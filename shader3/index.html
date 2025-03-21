@@ -7,13 +7,27 @@
   <style>
     body {
       margin: 0;
+      padding: 0;
       overflow: hidden;
       background-color: #000;
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
     }
     canvas {
       display: block;
-      width: 100%;
+      position: absolute;
+      width: 100vw;
       height: 100vh;
+      top: 0;
+      left: 0;
+    }
+    html {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
@@ -238,15 +252,35 @@
       camera.position.y = -mouseY * 0.05;
       camera.lookAt(scene.position);
       
+      // Check for resize on each frame to ensure fullscreen
+      resizeRendererToDisplaySize();
+      
       renderer.render(scene, camera);
     }
 
+    // Ensure full-screen rendering and proper resizing
+    function resizeRendererToDisplaySize() {
+      const canvas = renderer.domElement;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const needResize = canvas.width !== width || canvas.height !== height;
+      
+      if (needResize) {
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+      
+      return needResize;
+    }
+    
     // Handle window resize
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      resizeRendererToDisplaySize();
     });
+    
+    // Initial resize
+    resizeRendererToDisplaySize();
 
     // Start animation
     animate();
