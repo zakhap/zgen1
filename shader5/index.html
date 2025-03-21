@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chromatic Bands Shader</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #000;
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    canvas {
+      display: block;
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      top: 0;
+      left: 0;
+    }
+    html {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // Initialize Three.js scene
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Vertex shader code
+    const vertexShader = `
+      varying vec2 vUv;
+      
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    // Fragment shader code for chromatic bands effect
+    const fragmentShader = `
+      uniform float time;
+      varying vec2 vUv;
+      
+      // Simple noise function
+      float noise(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+      
+      // HSV to RGB conversion
+      vec3 hsv2rgb(vec3 c) {
+        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+      }
+      
+      void main() {
+        vec2 uv = vUv;
+        
+        // Create curved bands
+        float bandAngle = 0.2 + 0.1 * sin(time * 0.1);
+        float bandFrequency = 6.0 + 2.0 * sin(time * 0.05);
+        float bandPhase = time * 0.05;
+        
+        // Rotate the UV space for curved bands
+        vec2 rotatedUV = vec2(
+          uv.x * cos(bandAngle) - uv.y * sin(bandAngle),
+          uv.x * sin(bandAngle) + uv.y * cos(bandAngle)
+        );
+        
+        // Create circular distortion
+        vec2 center = vec2(0.5, 0.5);
+        float dist = length(uv - center);
+        float distortion = sin(dist * 10.0 - time * 0.1) * 0.02;
+        rotatedUV += distortion;
+        
+        // Generate bands
+        float bands = sin(rotatedUV.x * bandFrequency + bandPhase) * 0.5 + 0.5;
+        
+        // Add second layer of bands at different angle and frequency
+        float bandAngle2 = bandAngle + 0.8;
+        vec2 rotatedUV2 = vec2(
+          uv.x * cos(bandAngle2) - uv.y * sin(bandAngle2),
+          uv.x * sin(bandAngle2) + uv.y * cos(bandAngle2)
+        );
+        float bands2 = sin(rotatedUV2.x * (bandFrequency * 0.7) - bandPhase) * 0.5 + 0.5;
+        
+        // Combine bands
+        float combinedBands = mix(bands, bands2, 0.5);
+        
+        // Add subtle noise texture
+        float noiseValue = noise(rotatedUV * 50.0) * 0.05;
+        combinedBands += noiseValue;
+        
+        // Create smooth color transitions
+        float hue = fract(combinedBands * 0.7 + time * 0.03);
+        float saturation = 0.85;
+        float value = 0.9;
+        
+        // Create gradient from blue to orange
+        vec3 blueColor = vec3(0.1, 0.3, 0.9);
+        vec3 cyanColor = vec3(0.0, 0.8, 1.0);
+        vec3 orangeColor = vec3(1.0, 0.5, 0.0);
+        vec3 redColor = vec3(0.8, 0.2, 0.2);
+        
+        // Map band value to color
+        vec3 color;
+        if (combinedBands < 0.25) {
+          color = mix(blueColor, cyanColor, combinedBands * 4.0);
+        } else if (combinedBands < 0.5) {
+          color = mix(cyanColor, orangeColor, (combinedBands - 0.25) * 4.0);
+        } else if (combinedBands < 0.75) {
+          color = mix(orangeColor, redColor, (combinedBands - 0.5) * 4.0);
+        } else {
+          color = mix(redColor, blueColor, (combinedBands - 0.75) * 4.0);
+        }
+        
+        // Adjust brightness based on position
+        float brightness = 0.8 + 0.2 * sin(dist * 5.0 + time * 0.2);
+        color *= brightness;
+        
+        // Add subtle bloom effect to enhance the glow
+        float bloomIntensity = 0.2;
+        color += color * bloomIntensity * smoothstep(0.4, 0.9, combinedBands);
+        
+        // Final output
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    // Create a uniform for time that will be updated in animation loop
+    const uniforms = {
+      time: { value: 0.0 }
+    };
+
+    // Create shader material
+    const material = new THREE.ShaderMaterial({
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
+      uniforms: uniforms
+    });
+
+    // Create a plane geometry that covers the entire view
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const plane = new THREE.Mesh(geometry, material);
+    scene.add(plane);
+
+    // Position camera
+    camera.position.z = 1;
+
+    // Add interactive mouse movement
+    let mouseX = 0, mouseY = 0;
+    document.addEventListener('mousemove', (event) => {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseY = (event.clientY / window.innerHeight) * 2 - 1;
+    });
+
+    // Ensure full-screen rendering and proper resizing
+    function resizeRendererToDisplaySize() {
+      const canvas = renderer.domElement;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const needResize = canvas.width !== width || canvas.height !== height;
+      
+      if (needResize) {
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      }
+      
+      return needResize;
+    }
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      resizeRendererToDisplaySize();
+    });
+    
+    // Initial resize
+    resizeRendererToDisplaySize();
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      // Update time uniform
+      uniforms.time.value += 0.01;
+      
+      // Add subtle camera movement based on mouse position
+      camera.position.x = mouseX * 0.05;
+      camera.position.y = -mouseY * 0.05;
+      camera.lookAt(scene.position);
+      
+      // Check for resize on each frame to ensure fullscreen
+      resizeRendererToDisplaySize();
+      
+      renderer.render(scene, camera);
+    }
+
+    // Start animation
+    animate();
+  </script>
+</body>
+</html>
