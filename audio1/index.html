@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Just Intonation Synth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .key {
+            width: 40px;
+            height: 120px;
+            margin: 2px;
+            background-color: white;
+            border: 1px solid black;
+            display: inline-block;
+            text-align: center;
+            vertical-align: top;
+            cursor: pointer;
+            position: relative;
+        }
+        .black-key {
+            background-color: black;
+            color: white;
+            height: 80px;
+            width: 30px;
+            margin-left: -15px;
+            margin-right: -15px;
+            z-index: 1;
+            position: relative;
+        }
+        .key .ratio {
+            position: absolute;
+            bottom: 5px;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+        }
+        .black-key .ratio {
+            color: #ccc;
+        }
+        #keyboard {
+            margin: 20px;
+            text-align: center;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #controls {
+            margin: 20px;
+            text-align: center;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #info-display {
+            margin: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #lattice-display {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+        .lattice-cell {
+            padding: 8px;
+            text-align: center;
+            border-radius: 4px;
+            background-color: #eef;
+        }
+        .lattice-cell.active {
+            background-color: #ccf;
+        }
+        #status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Just Intonation Keyboard</h1>
+    
+    <div id="info-display">
+        <div id="status">Ready to play</div>
+        <div>Root: <span id="root-note">C</span> (261.63 Hz)</div>
+        <div>Current Mode: <span id="current-mode">Standard Mapping</span></div>
+        <div id="explanation">
+            <p>This keyboard uses Just Intonation - a tuning system based on pure frequency ratios. Notes are mapped to a 2D lattice with:</p>
+            <ul>
+                <li>Horizontal axis: Perfect fifths (3:2 ratio)</li>
+                <li>Vertical axis: Major thirds (5:4 ratio)</li>
+            </ul>
+            <p>Each key shows its frequency ratio relative to the root note.</p>
+        </div>
+    </div>
+    
+    <div id="keyboard"></div>
+    
+    <div id="controls">
+        <button id="change-root">Change Root</button>
+        <button id="play-major-scale">Play Major Scale</button>
+        <button id="play-minor-scale">Play Minor Scale</button>
+        <button id="play-chord-progression">Play Chord Progression</button>
+        <button id="stop-autoplay">Stop Autoplay</button>
+    </div>
+    
+    <script>
+        // Initialize audio context with a click to satisfy browser autoplay policies
+        let audioContext;
+        document.addEventListener('click', initAudio, { once: true });
+        
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                document.getElementById('status').textContent = "Audio initialized!";
+            }
+        }
+        
+        // Just Intonation parameters
+        const rootFreq = 261.63; // Middle C
+        let currentRoot = 0; // C
+        
+        // Lattice configuration
+        const fifthsRatio = 3/2;
+        const thirdsRatio = 5/4;
+        
+        // Create the lattice
+        const lattice = {};
+        for (let x = -4; x <= 4; x++) {
+            for (let y = -2; y <= 2; y++) {
+                let ratio = 1.0;
+                
+                // Apply fifths (x dimension)
+                if (x > 0) {
+                    for (let i = 0; i < x; i++) ratio *= fifthsRatio;
+                } else if (x < 0) {
+                    for (let i = 0; i < -x; i++) ratio /= fifthsRatio;
+                }
+                
+                // Apply thirds (y dimension)
+                if (y > 0) {
+                    for (let i = 0; i < y; i++) ratio *= thirdsRatio;
+                } else if (y < 0) {
+                    for (let i = 0; i < -y; i++) ratio /= thirdsRatio;
+                }
+                
+                // Normalize to one octave
+                while (ratio >= 2.0) ratio /= 2.0;
+                while (ratio < 1.0) ratio *= 2.0;
+                
+                lattice[`${x},${y}`] = ratio;
+            }
+        }
+        
+        // Map MIDI notes to lattice points
+        const noteToLattice = {
+            0: "0,0",   // C
+            1: "-4,2",  // C#
+            2: "-1,1",  // D
+            3: "-1,0",  // D#
+            4: "0,1",   // E
+            5: "-2,1",  // F
+            6: "-3,2",  // F#
+            7: "1,0",   // G
+            8: "0,-1",  // G#
+            9: "2,0",   // A
+            10: "-2,0", // A#
+            11: "3,0"   // B
+        };
+        
+        // Create keyboard UI
+        const keyboardDiv = document.getElementById('keyboard');
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const isBlackKey = [false, true, false, true, false, false, true, false, true, false, true, false];
+        
+        const keys = [];
+        const activeOscillators = {};
+        
+        // Create two octaves of keys for better visualization
+        for (let octave = 0; octave < 2; octave++) {
+            for (let i = 0; i < 12; i++) {
+                const noteNumber = i + (octave * 12);
+                const key = document.createElement('div');
+                key.className = 'key' + (isBlackKey[i] ? ' black-key' : '');
+                key.textContent = noteNames[i] + (octave + 4); // Starting from C4 (middle C)
+                key.dataset.note = noteNumber;
+                
+                // Show ratio
+                const ratioDiv = document.createElement('div');
+                ratioDiv.className = 'ratio';
+                
+                // For the first octave, calculate the ratio
+                if (octave === 0) {
+                    const latticePoint = noteToLattice[i];
+                    const ratio = lattice[latticePoint].toFixed(3);
+                    ratioDiv.textContent = ratio;
+                    key.title = `Ratio: ${ratio}`;
+                } else {
+                    // For the second octave, the ratio is the same but an octave higher
+                    const latticePoint = noteToLattice[i];
+                    const ratio = (lattice[latticePoint] * 2).toFixed(3);
+                    ratioDiv.textContent = ratio;
+                    key.title = `Ratio: ${ratio}`;
+                }
+                
+                key.appendChild(ratioDiv);
+                
+                key.addEventListener('mousedown', () => {
+                    if (audioContext) playNote(noteNumber);
+                    else initAudio();
+                });
+                key.addEventListener('mouseup', () => stopNote(noteNumber));
+                key.addEventListener('mouseleave', () => stopNote(noteNumber));
+                
+                keyboardDiv.appendChild(key);
+                keys.push(key);
+            }
+        }
+        
+        // Set up keyboard controls
+        const keyMap = {
+            'a': 0, 'w': 1, 's': 2, 'e': 3, 'd': 4, 'f': 5, 't': 6, 'g': 7, 'y': 8, 'h': 9, 'u': 10, 'j': 11,
+            'k': 12, 'o': 13, 'l': 14, 'p': 15, ';': 16, "'": 17
+        };
+        
+        document.addEventListener('keydown', (e) => {
+            if (keyMap[e.key] !== undefined && !e.repeat) {
+                if (!audioContext) initAudio();
+                playNote(keyMap[e.key]);
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (keyMap[e.key] !== undefined) {
+                stopNote(keyMap[e.key]);
+            }
+        });
+        
+        // Autoplay variables
+        let autoplayInterval = null;
+        let currentSequence = [];
+        let currentStep = 0;
+        
+        // Scale definitions
+        const majorScale = [0, 2, 4, 5, 7, 9, 11, 12]; // C Major: C D E F G A B C
+        const minorScale = [0, 2, 3, 5, 7, 8, 10, 12]; // C Minor: C D Eb F G Ab Bb C
+        const chordProgression = [
+            [0, 4, 7],    // C Major (I)
+            [5, 9, 0],    // F Major (IV)
+            [7, 11, 2],   // G Major (V)
+            [0, 4, 7]     // C Major (I)
+        ];
+        
+        // Function to play a note
+        function playNote(noteNumber) {
+            if (!audioContext) return;
+            
+            // Stop if already playing
+            if (activeOscillators[noteNumber]) {
+                stopNote(noteNumber);
+            }
+            
+            // Calculate the octave and note within octave
+            const octave = Math.floor(noteNumber / 12);
+            const noteInOctave = noteNumber % 12;
+            
+            // Calculate adjusted note number relative to current root
+            const adjustedNote = (noteInOctave - currentRoot + 12) % 12;
+            
+            // Get lattice point for this note
+            const latticePoint = noteToLattice[adjustedNote];
+            let ratio = lattice[latticePoint];
+            
+            // Adjust for octave
+            ratio *= Math.pow(2, octave);
+            
+            // Calculate frequency
+            const frequency = rootFreq * ratio;
+            
+            // Create oscillator
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            gainNode.gain.value = 0.2;
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            
+            // Store the oscillator and gain node
+            activeOscillators[noteNumber] = { oscillator, gainNode };
+            
+            // Highlight the key
+            if (keys[noteNumber]) {
+                keys[noteNumber].style.backgroundColor = isBlackKey[noteNumber % 12] ? '#444' : '#cce';
+                keys[noteNumber].style.transform = 'translateY(2px)';
+            }
+            
+            // Update status
+            document.getElementById('status').textContent = 
+                `Playing: ${noteNames[noteNumber % 12]}${Math.floor(noteNumber/12) + 4} (${frequency.toFixed(2)} Hz)`;
+        }
+        
+        function stopNote(noteNumber) {
+            if (activeOscillators[noteNumber]) {
+                // Apply a quick fade out to avoid clicks
+                activeOscillators[noteNumber].gainNode.gain.setValueAtTime(
+                    activeOscillators[noteNumber].gainNode.gain.value, audioContext.currentTime);
+                activeOscillators[noteNumber].gainNode.gain.exponentialRampToValueAtTime(
+                    0.001, audioContext.currentTime + 0.03);
+                
+                // Stop oscillator after the fade
+                activeOscillators[noteNumber].oscillator.stop(audioContext.currentTime + 0.03);
+                
+                // Remove from active oscillators
+                delete activeOscillators[noteNumber];
+                
+                // Reset key appearance
+                if (keys[noteNumber]) {
+                    keys[noteNumber].style.backgroundColor = isBlackKey[noteNumber % 12] ? 'black' : 'white';
+                    keys[noteNumber].style.transform = 'translateY(0)';
+                }
+            }
+        }
+        
+        // Change root button
+        document.getElementById('change-root').addEventListener('click', () => {
+            currentRoot = (currentRoot + 1) % 12;
+            document.getElementById('root-note').textContent = noteNames[currentRoot];
+            
+            // Update ratios displayed on keys
+            for (let i = 0; i < 12; i++) {
+                const adjustedNote = (i - currentRoot + 12) % 12;
+                const latticePoint = noteToLattice[adjustedNote];
+                const ratio = lattice[latticePoint].toFixed(3);
+                
+                if (keys[i]) {
+                    const ratioDiv = keys[i].querySelector('.ratio');
+                    if (ratioDiv) ratioDiv.textContent = ratio;
+                }
+            }
+        });
+        
+        // Autoplay functions
+        function startAutoplay(sequence, tempo = 500, isChord = false) {
+            // Initialize audio if not already done
+            if (!audioContext) initAudio();
+            
+            // Stop any existing autoplay
+            stopAutoplay();
+            
+            currentSequence = sequence;
+            currentStep = 0;
+            
+            // Update UI
+            document.getElementById('status').textContent = "Autoplay started";
+            
+            // Start autoplay interval
+            autoplayInterval = setInterval(() => {
+                // Stop all currently playing notes
+                Object.keys(activeOscillators).forEach(note => stopNote(Number(note)));
+                
+                if (isChord) {
+                    // Play chord
+                    const chord = currentSequence[currentStep];
+                    chord.forEach(note => playNote(note));
+                    
+                    document.getElementById('status').textContent = 
+                        `Playing chord ${currentStep + 1}/${currentSequence.length}`;
+                } else {
+                    // Play single note
+                    const note = currentSequence[currentStep];
+                    playNote(note);
+                }
+                
+                // Advance to next step
+                currentStep = (currentStep + 1) % currentSequence.length;
+            }, tempo);
+        }
+        
+        function stopAutoplay() {
+            if (autoplayInterval) {
+                clearInterval(autoplayInterval);
+                autoplayInterval = null;
+                
+                // Stop all notes
+                Object.keys(activeOscillators).forEach(note => stopNote(Number(note)));
+                
+                document.getElementById('status').textContent = "Autoplay stopped";
+            }
+        }
+        
+        // Set up autoplay buttons
+        document.getElementById('play-major-scale').addEventListener('click', () => {
+            document.getElementById('current-mode').textContent = "Major Scale";
+            startAutoplay(majorScale, 500);
+        });
+        
+        document.getElementById('play-minor-scale').addEventListener('click', () => {
+            document.getElementById('current-mode').textContent = "Minor Scale";
+            startAutoplay(minorScale, 500);
+        });
+        
+        document.getElementById('play-chord-progression').addEventListener('click', () => {
+            document.getElementById('current-mode').textContent = "Chord Progression";
+            startAutoplay(chordProgression, 1000, true);
+        });
+        
+        document.getElementById('stop-autoplay').addEventListener('click', stopAutoplay);
+    </script>
+</body>
+</html>

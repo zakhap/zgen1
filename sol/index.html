@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sol LeWitt Grid Recreation</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0e8;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            background-color: #f2f0e6;
+        }
+        .caption {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #333;
+            max-width: 600px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="leWittCanvas" width="600" height="600"></canvas>
+    <div class="caption">successive rows of horizontal straight lines from top to bottom, & vertical straight lines from left to right | sol lewitt | august 19, 1971 - spoleto</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('leWittCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set up canvas dimensions
+            const canvasSize = 600;
+            const margin = 50;
+            const drawingSize = canvasSize - (margin * 2);
+            
+            // Background
+            ctx.fillStyle = '#f2f0e6';
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
+            
+            // Drawing area
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 0.5;
+
+            // Function to draw the grid
+            function drawLeWittGrid() {
+                // Define the pattern spacing for horizontal lines
+                const horizontalClusters = 14;
+                const linesPerHorizontalCluster = 3;
+                const horizontalClusterSpacing = drawingSize / horizontalClusters;
+                const horizontalLineSpacing = 2;
+                
+                // Draw horizontal lines (increasing density from top to bottom)
+                for (let cluster = 0; cluster < horizontalClusters; cluster++) {
+                    const yStart = margin + (cluster * horizontalClusterSpacing);
+                    
+                    for (let line = 0; line < linesPerHorizontalCluster; line++) {
+                        const y = yStart + (line * horizontalLineSpacing);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(margin, y);
+                        ctx.lineTo(margin + drawingSize, y);
+                        ctx.stroke();
+                    }
+                }
+                
+                // Define the pattern spacing for vertical lines
+                // Wider spacing on left, denser on right
+                let verticalSpacingDivisor = 6; // Start with wider spacing
+                const numVerticalSections = 30;
+                const sectionWidth = drawingSize / numVerticalSections;
+                
+                for (let section = 0; section < numVerticalSections; section++) {
+                    // Calculate number of lines for this section
+                    const linesInThisSection = Math.max(2, Math.floor(section / 3) + 1);
+                    const xBase = margin + (section * sectionWidth);
+                    
+                    // Draw clustered vertical lines
+                    for (let line = 0; line < linesInThisSection; line++) {
+                        // Position within section
+                        const x = xBase + (line * 1.5);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x, margin);
+                        ctx.lineTo(x, margin + drawingSize);
+                        ctx.stroke();
+                    }
+                    
+                    // Progressively increase density
+                    if (section % 5 === 0 && verticalSpacingDivisor > 1) {
+                        verticalSpacingDivisor--;
+                    }
+                }
+            }
+
+            // Draw the grid
+            drawLeWittGrid();
+        });
+    </script>
+</body>
+</html>
