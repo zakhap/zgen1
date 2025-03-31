@@ -18,6 +18,8 @@
         canvas {
             border: 1px solid #ddd;
             background-color: #f2f0e6;
+            max-width: 90vw;
+            max-height: 90vh;
         }
         .caption {
             margin-top: 10px;
@@ -29,7 +31,7 @@
     </style>
 </head>
 <body>
-    <canvas id="leWittCanvas" width="600" height="600"></canvas>
+    <canvas id="leWittCanvas" width="1200" height="1200"></canvas>
     <div class="caption">successive rows of horizontal straight lines from top to bottom, & vertical straight lines from left to right | sol lewitt | august 19, 1971 - spoleto</div>
 
     <script>
@@ -38,8 +40,8 @@
             const ctx = canvas.getContext('2d');
             
             // Set up canvas dimensions
-            const canvasSize = 600;
-            const margin = 50;
+            const canvasSize = 1200;
+            const margin = 100;
             const drawingSize = canvasSize - (margin * 2);
             
             // Background
@@ -48,15 +50,15 @@
             
             // Drawing area
             ctx.strokeStyle = '#000';
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.7;
 
             // Function to draw the grid
             function drawLeWittGrid() {
                 // Define the pattern spacing for horizontal lines
-                const horizontalClusters = 14;
-                const linesPerHorizontalCluster = 3;
+                const horizontalClusters = 20;
+                const linesPerHorizontalCluster = 4;
                 const horizontalClusterSpacing = drawingSize / horizontalClusters;
-                const horizontalLineSpacing = 2;
+                const horizontalLineSpacing = 2.5;
                 
                 // Draw horizontal lines (increasing density from top to bottom)
                 for (let cluster = 0; cluster < horizontalClusters; cluster++) {
@@ -75,7 +77,7 @@
                 // Define the pattern spacing for vertical lines
                 // Wider spacing on left, denser on right
                 let verticalSpacingDivisor = 6; // Start with wider spacing
-                const numVerticalSections = 30;
+                const numVerticalSections = 50;
                 const sectionWidth = drawingSize / numVerticalSections;
                 
                 for (let section = 0; section < numVerticalSections; section++) {
